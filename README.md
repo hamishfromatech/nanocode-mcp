@@ -6,6 +6,10 @@ A lightweight, fast, and secure Model Context Protocol (MCP) server that exposes
 
 **nanocode-mcp** is an MCP server designed to give AI assistants and MCP clients the ability to interact with your local filesystem and execute shell commands. Built with [FastMCP](https://github.com/jlowin/fastmcp), it provides a streamlined set of tools for coding tasks.
 
+Based on [nanocode](https://github.com/1rgs/nanocode) by 1rgs.
+
+
+
 - **Author & Maintainer**: The A-Tech Corporation PTY LTD
 - **License**: Open Source
 
@@ -21,6 +25,43 @@ A lightweight, fast, and secure Model Context Protocol (MCP) server that exposes
 | `glob_search` | Find files by glob pattern, sorted by modification time |
 | `grep_search` | Search files for regex patterns |
 | `run_bash` | Execute shell commands with timeout support |
+| `semantic_search` | Search codebase using natural language queries (requires Ollama) |
+| `reindex_codebase` | Manually trigger a full re-index of the codebase |
+
+### Semantic Search
+
+The `semantic_search` tool enables natural language code search using vector embeddings. It indexes your codebase in the background and allows you to search for code using descriptive queries.
+
+**Requirements:**
+- [Ollama](https://ollama.com/) installed and running
+- `nomic-embed-text` model: `ollama pull nomic-embed-text`
+
+**How it works:**
+- On startup, the server indexes supported file types in the background
+- Index is persisted to `.nanocode-mcp/vector_store.json`
+- Truncates files to ~6000 chars to stay within embedding model context limits
+
+**Supported file types:** `.py`, `.js`, `.ts`, `.jsx`, `.tsx`, `.json`, `.md`, `.txt`, `.yaml`, `.yml`, `.toml`, `.ini`, `.cfg`, `.sh`, `.bash`, `.zsh`, `.html`, `.css`, `.scss`, `.sql`, `.xml`, `.go`, `.rs`, `.java`, `.c`, `.cpp`, `.h`, `.hpp`
+| `semantic_search` | Search codebase using natural language queries (requires Ollama) |
+| `reindex_codebase` | Manually trigger a full re-index of the codebase |
+
+### Semantic Search
+
+The server includes a semantic search feature that indexes your codebase and enables natural language queries. It uses local embeddings via Ollama with the `nomic-embed-text` model.
+
+**Setup:**
+1. Install Ollama: https://ollama.com/
+2. Pull the embedding model:
+   ```bash
+   ollama pull nomic-embed-text
+   ```
+
+The server automatically indexes supported file types in the background on startup. Indexed files include: `.py`, `.js`, `.ts`, `.jsx`, `.tsx`, `.json`, `.md`, `.txt`, `.yaml`, `.yml`, `.toml`, `.ini`, `.cfg`, `.sh`, `.bash`, `.zsh`, `.html`, `.css`, `.scss`, `.sql`, `.xml`, `.go`, `.rs`, `.java`, `.c`, `.cpp`, `.h`, `.hpp`
+
+**Example:**
+```
+semantic_search("find authentication logic")
+```
 
 ## Installation
 
@@ -28,6 +69,7 @@ A lightweight, fast, and secure Model Context Protocol (MCP) server that exposes
 
 - Python 3.10 or higher
 - `fastmcp` package
+- [Ollama](https://ollama.com/) with `nomic-embed-text` model (for semantic search)
 
 ### Setup
 
@@ -201,6 +243,80 @@ Execute a shell command.
 - `timeout` (int, optional): Timeout in seconds (default: 30)
 
 **Returns:** Command output (stdout and stderr combined)
+
+---
+
+### `semantic_search`
+
+Search the codebase using natural language queries via vector embeddings.
+
+**Parameters:**
+- `query` (string): Natural language query describing what to search for
+- `limit` (int, optional): Maximum results to return (default: 5)
+
+**Returns:** Ranked search results with file paths, similarity scores, and context snippets
+
+**Requires:** Ollama running with `nomic-embed-text` model
+
+---
+
+### `reindex_codebase`
+
+Manually trigger a full re-index of the codebase for semantic search.
+
+**Parameters:** None
+
+**Returns:** Status message about the re-indexing operation
+
+---
+
+### `semantic_search`
+
+Search the codebase using natural language queries via vector embeddings.
+
+**Parameters:**
+- `query` (string): Natural language query describing what to search for
+- `limit` (int, optional): Maximum results to return (default: 5)
+
+**Returns:** Ranked search results with file paths, similarity scores, and context snippets
+
+**Requires:** Ollama running with `nomic-embed-text` model
+
+---
+
+### `reindex_codebase`
+
+Manually trigger a full re-index of the codebase for semantic search.
+
+**Parameters:** None
+
+**Returns:** Status message about the re-indexing operation
+
+---
+
+### `semantic_search`
+
+Search the codebase using natural language queries.
+
+**Parameters:**
+- `query` (string): Natural language query describing what to search for
+- `limit` (int, optional): Maximum results to return (default: 5)
+
+**Returns:** Ranked search results with file paths, similarity scores, and context snippets
+
+**Requires:** Ollama with `nomic-embed-text` model running
+
+---
+
+### `reindex_codebase`
+
+Manually trigger a full re-index of the codebase.
+
+**Parameters:** None
+
+**Returns:** Status message about the re-indexing operation
+
+**Note:** Re-indexing runs in the background and clears the existing index
 
 ## Security Considerations
 

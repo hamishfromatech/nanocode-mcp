@@ -2,10 +2,15 @@
 """nanocode MCP server - coding agent tools exposed via Model Context Protocol"""
 
 import glob as globlib
+import json
+import math
 import os
 import re
 import subprocess
+import threading
 from typing import Optional
+
+import ollama
 
 from fastmcp import FastMCP
 
@@ -14,6 +19,132 @@ mcp = FastMCP(
     "nanocode",
     instructions="A coding agent with tools for reading, writing, editing files, searching code, and running shell commands. Use these tools to help with coding tasks."
 )
+
+
+# --- File-based Vector Store for Semantic Search ---
+
+VECTOR_STORE_FILE = ".nanocode-mcp/vector_store.json"
+EMBEDDING_MODEL = "nomic-embed-text"
+INDEXED_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx", ".json", ".md", ".txt", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".sh", ".bash", ".zsh", ".html", ".css", ".scss", ".sql", ".xml", ".go", ".rs", ".java", ".c", ".cpp", ".h", ".hpp"}
+
+vector_store = {"documents": []}
+index_lock = threading.Lock()
+indexing_complete = False
+
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Compute cosine similarity between two vectors."""
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def load_vector_store() -> dict:
+    """Load vector store from file if it exists."""
+    if os.path.exists(VECTOR_STORE_FILE):
+        try:
+            with open(VECTOR_STORE_FILE, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {"documents": []}
+
+
+def save_vector_store(store: dict) -> None:
+    """Save vector store to file."""
+    os.makedirs(os.path.dirname(VECTOR_STORE_FILE), exist_ok=True)
+    with open(VECTOR_STORE_FILE, "w") as f:
+        json.dump(store, f)
+
+
+def get_file_embedding(text: str) -> Optional[list[float]]:
+    """Get embedding for text using Ollama.
+
+    Text is truncated to ~6000 chars to stay within the embedding model's
+    context window (nomic-embed-text has 8192 token limit).
+    """
+    # Truncate to stay within embedding model context window
+    # ~6000 chars ≈ 2000-3000 tokens for code
+    truncated = text[:6000] if len(text) > 6000 else text
+    try:
+        response = ollama.embed(model=EMBEDDING_MODEL, input=truncated)
+        return response["embeddings"][0]
+    except Exception as e:
+        print(f"Embedding error: {e}")
+        return None
+
+
+def index_file(filepath: str) -> Optional[dict]:
+    """Index a single file, returning its document entry."""
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext not in INDEXED_EXTENSIONS:
+        return None
+    
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+    except Exception:
+        return None
+    
+    if not content.strip():
+        return None
+    
+    embedding = get_file_embedding(content)
+    if embedding is None:
+        return None
+    
+    return {
+        "path": filepath,
+        "content": content[:5000],
+        "embedding": embedding,
+        "mtime": os.path.getmtime(filepath)
+    }
+
+
+def background_index() -> None:
+    """Background thread to index all code files."""
+    global vector_store, indexing_complete
+    
+    print("Starting background vectorization...")
+    store = load_vector_store()
+    existing_paths = {doc["path"]: doc for doc in store.get("documents", [])}
+    
+    base_dir = os.getcwd()
+    new_docs = []
+    
+    for pattern in ["**/*.py", "**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.json", "**/*.md", "**/*.yaml", "**/*.yml", "**/*.toml", "**/*.go", "**/*.rs", "**/*.java"]:
+        for filepath in globlib.glob(os.path.join(base_dir, pattern), recursive=True):
+            filepath = os.path.relpath(filepath, base_dir)
+            if filepath in existing_paths:
+                existing_doc = existing_paths[filepath]
+                try:
+                    current_mtime = os.path.getmtime(filepath)
+                    if current_mtime > existing_doc.get("mtime", 0):
+                        doc = index_file(filepath)
+                        if doc:
+                            new_docs.append(doc)
+                except OSError:
+                    pass
+            else:
+                doc = index_file(filepath)
+                if doc:
+                    new_docs.append(doc)
+    
+    if new_docs:
+        store["documents"] = list(existing_paths.values()) + new_docs
+        save_vector_store(store)
+        vector_store = store
+    
+    indexing_complete = True
+    print(f"Vectorization complete. Indexed {len(store.get('documents', []))} files.")
+
+
+# Start background indexing
+indexing_thread = threading.Thread(target=background_index, daemon=True)
+indexing_thread.start()
 
 
 # --- Tool implementations as MCP tools ---
@@ -154,6 +285,70 @@ def run_bash(command: str, timeout: int = 30) -> str:
         proc.kill()
         output_lines.append(f"\n(timed out after {timeout}s)")
     return "".join(output_lines).strip() or "(empty)"
+
+
+@mcp.tool
+def semantic_search(query: str, limit: int = 5) -> str:
+    """Search the codebase using semantic (embedding-based) search.
+    
+    Args:
+        query: Natural language query describing what to search for
+        limit: Maximum number of results to return (default: 5)
+    
+    Returns:
+        Ranked search results with file paths, similarity scores, and context snippets
+    """
+    global vector_store, indexing_complete
+    
+    query_embedding = get_file_embedding(query)
+    if query_embedding is None:
+        return "error: could not generate embedding for query (is Ollama running?)"
+    
+    docs = vector_store.get("documents", [])
+    if not docs:
+        if not indexing_complete:
+            return "indexing in progress... please try again in a few seconds"
+        return "no indexed documents found"
+    
+    results = []
+    for doc in docs:
+        sim = cosine_similarity(query_embedding, doc.get("embedding", []))
+        results.append((sim, doc))
+    
+    results.sort(key=lambda x: x[0], reverse=True)
+    top_results = results[:limit]
+    
+    output = []
+    for score, doc in top_results:
+        content = doc.get("content", "")[:800]
+        path = doc.get("path", "unknown")
+        output.append(f"{path} (score: {score:.3f})\n---\n{content}\n---\n")
+    
+    return "\n".join(output) if output else "no results found"
+
+
+@mcp.tool
+def reindex_codebase() -> str:
+    """Manually trigger a full re-index of the codebase.
+    
+    Returns:
+        Status message about the re-indexing operation
+    """
+    global vector_store, indexing_complete
+    
+    indexing_complete = False
+    
+    def reindex():
+        global vector_store, indexing_complete
+        save_vector_store({"documents": []})
+        vector_store = {"documents": []}
+        background_index()
+    
+    thread = threading.Thread(target=reindex, daemon=True)
+    thread.start()
+    
+    return "re-indexing started in background..."
+
 
 
 # --- Entry point ---
