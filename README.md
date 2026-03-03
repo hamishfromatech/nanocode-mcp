@@ -337,4 +337,4 @@ Open Source - see LICENSE file for details.
 
 ---
 
-**Made with ❤️ by [The A-Tech Corporation PTY LTD](https://github.com/hamishfromatech)**
+**Made with ❤️ by [The A-Tech Corporation PTY LTD](https://theatechcorporation.com)**
