@@ -31,12 +31,16 @@ A lightweight, fast, and secure Model Context Protocol (MCP) server that exposes
 
 ### Setup
 
-1. Clone the repository2. Install dependencies:
+1. Clone the repository
+2. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-   > **Note:** `openai` is only required for the CLI test client.s only required for the CLI test client.   ```bash
+   > **Note:** `openai` is only required for the CLI test client.
+
+3. Install fastmcp:
+   ```bash
    pip install fastmcp
    ```
 
@@ -69,7 +73,14 @@ Add to your Claude Desktop configuration file:
 {
   "mcpServers": {
     "nanocode": {
-      "command": "pytho#### Other MCP Clients
+      "command": "python",
+      "args": ["C:/path/to/mcp_server.py"]
+    }
+  }
+}
+```
+
+#### Other MCP Clients
 
 For clients that support MCP over stdio, simply run:
 
@@ -79,15 +90,13 @@ python /path/to/mcp_server.py
 
 ### CLI Test Client
 
-A CLI-based test client is included for easy testing with [Ollama](https://ollama.com/
+A CLI-based test client is included for easy testing with [Ollama](https://ollama.com/).
 
 **Prerequisites:**
 1. Install Ollama: https://ollama.com/
 2. Pull the model:
    ```bash
-   ollama pull qwen3.5:4b
-   ```
-3. Ensure dependencies are installed (see Installation section)3.5:4b
+   ollama pull qwen2.5:4b
    ```
 3. Install additional dependency:
    ```bash
@@ -116,12 +125,6 @@ You: List all Python files in the current directory
 Assistant: I found 2 Python files in the current directory:
 - mcp_server.py
 - client.py
-```
-
-## Tool Referencer stdio, simply run:
-
-```bash
-python /path/to/mcp_server.py
 ```
 
 ## Tool Reference
