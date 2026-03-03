@@ -1,0 +1,5 @@
+# nanocode MCP Server
+fastmcp>=2.0.0
+
+# CLI Test Client (optional - for client.py)
+openai>=1.0.0
