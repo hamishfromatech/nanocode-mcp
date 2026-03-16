@@ -28,7 +28,7 @@ client = OpenAI(
     api_key="ollama",  # Required but unused for Ollama
 )
 
-MODEL = "qwen3.5:4b"
+MODEL = "qwen3.5:cloud"
 
 SYSTEM_PROMPT = """You are a helpful coding assistant with access to file system tools.
 
