@@ -1,5 +1,5 @@
 # nanocode MCP Server
-fastmcp>=2.0.0
+fastmcp>=3.0.0
 ollama>=0.3.0
 
 # CLI Test Client (optional - for client.py)
